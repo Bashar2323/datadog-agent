@@ -285,11 +285,6 @@ func (p *Probe) AddActivityDumpHandler(handler activitydump.ActivityDumpHandler)
 	p.activityDumpHandler = handler
 }
 
-// AddEventHandler set the probe event handler
-func (p *Probe) AddEventHandler(eventType model.EventType, handler EventHandler) error {
-	if eventType >= model.MaxAllEventType {
-		return errors.New("unsupported event type")
-	}
 
 	p.eventHandlers[eventType] = append(p.eventHandlers[eventType], handler)
 
