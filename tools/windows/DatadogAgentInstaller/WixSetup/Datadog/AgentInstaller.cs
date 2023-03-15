@@ -61,6 +61,7 @@ namespace WixSetup.Datadog
         public Project ConfigureProject()
         {
             var project = new ManagedProject("Datadog Agent",
+                SupportedWindowsVersion.WindowsServer2012R2,
                 new Property("MsiLogging", "iwearucmop!"),
                 new Property("APIKEY")
                 {
