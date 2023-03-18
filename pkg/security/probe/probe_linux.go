@@ -281,26 +281,10 @@ func (p *Probe) Start() error {
 }
 
 // AddActivityDumpHandler set the probe activity dump handler
-func (p *Probe) AddActivityDumpHandler(handler activitydump.ActivityDumpHandler) {
+func (p *Probe) AddActivityDumpHandler(handler activitydump.ActivityDumpHandler) {	
 	p.activityDumpHandler = handler
 }
 
-
-	p.eventHandlers[eventType] = append(p.eventHandlers[eventType], handler)
-
-	return nil
-}
-
-// AddCustomEventHandler set the probe event handler
-func (p *Probe) AddCustomEventHandler(eventType model.EventType, handler CustomEventHandler) error {
-	if eventType >= model.MaxAllEventType {
-		return errors.New("unsupported event type")
-	}
-
-	p.customEventHandlers[eventType] = append(p.customEventHandlers[eventType], handler)
-
-	return nil
-}
 
 // DispatchEvent sends an event to the probe event handler
 func (p *Probe) DispatchEvent(event *model.Event) {
