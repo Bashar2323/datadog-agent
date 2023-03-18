@@ -38,6 +38,7 @@ from .go import (
     deps_vendored,
     generate_licenses,
     generate_protobuf,
+    go_fix,
     golangci_lint,
     lint_licenses,
     reset,
@@ -96,6 +97,7 @@ ns.add_task(generate_config)
 ns.add_task(junit_upload)
 ns.add_task(junit_macos_repack)
 ns.add_task(fuzz)
+ns.add_task(go_fix)
 
 # add namespaced tasks to the root
 ns.add_collection(agent)
