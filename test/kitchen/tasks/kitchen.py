@@ -151,7 +151,7 @@ def genconfig(
         env = load_user_env(ctx, provider, uservars)
 
     # set KITCHEN_ARCH if it's not set in the user env
-    if not 'KITCHEN_ARCH' in env and not ('KITCHEN_ARCH' in os.environ.keys()):
+    if 'KITCHEN_ARCH' not in env and not ('KITCHEN_ARCH' in os.environ.keys()):
             env['KITCHEN_ARCH'] = arch
 
     env['TEST_PLATFORMS'] = testplatforms
