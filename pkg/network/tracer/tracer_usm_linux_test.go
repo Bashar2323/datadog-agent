@@ -1142,8 +1142,6 @@ func TestTLSClassification(t *testing.T) {
 			context: testContext{
 				extras: make(map[string]interface{}),
 			},
-			preTracerSetup: func(t *testing.T, ctx testContext) {
-			},
 			postTracerSetup: func(t *testing.T, ctx testContext) {
 				clientSuccess := false
 				var wg sync.WaitGroup
@@ -1169,7 +1167,7 @@ func TestTLSClassification(t *testing.T) {
 						}
 					}
 					return false
-				}, 4*time.Second, time.Second, "couldn't find TLS connection matching: dstport %d", 44330)
+				}, 4*time.Second, time.Second, "couldn't find TLS connection matching: dstport 44330")
 			},
 		})
 	}
