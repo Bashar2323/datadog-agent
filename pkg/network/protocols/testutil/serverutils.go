@@ -64,13 +64,20 @@ func RunDockerServer(t *testing.T, serverName, dockerPath string, env []string, 
 	}
 }
 
+// RunHostServer is a template for running a command on the Host.
+// - command is the path for the command to execute.
+// - env is any environment variable required for running the server.
+// - serverStartRegex is a regex to be matched on the server logs to ensure it started correctly.
+// return true on success
 func RunHostServer(t *testing.T, command []string, env []string, serverStartRegex *regexp.Regexp) bool {
 	if len(command) < 1 {
 		t.Fatalf("command not set %v host server", command)
 	}
 	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 
-	cmd := exec.Command(command[0], command[1:]...)
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	serverName := cmd.String()
 	patternScanner := NewScanner(serverStartRegex, make(chan struct{}, 1))
 
