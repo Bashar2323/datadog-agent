@@ -23,10 +23,12 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"go.uber.org/atomic"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
 
 	"github.com/DataDog/datadog-agent/cmd/system-probe/api/module"
+	processnet "github.com/DataDog/datadog-agent/pkg/process/net"
 	"github.com/DataDog/datadog-agent/pkg/security/config"
 	sconfig "github.com/DataDog/datadog-agent/pkg/security/config"
 	"github.com/DataDog/datadog-agent/pkg/security/events"
@@ -41,6 +43,8 @@ import (
 	"github.com/DataDog/datadog-agent/pkg/security/secl/rules"
 	"github.com/DataDog/datadog-agent/pkg/security/seclog"
 	"github.com/DataDog/datadog-agent/pkg/security/utils"
+	"github.com/DataDog/datadog-agent/pkg/util/filesystem"
+	"github.com/DataDog/datadog-agent/pkg/util/log"
 	"github.com/DataDog/datadog-agent/pkg/version"
 )
 
@@ -82,6 +86,55 @@ func (m *Module) Register(_ *module.Router) error {
 	}
 
 	return m.Start()
+}
+
+type info struct {
+	credentials.CommonAuthInfo
+}
+
+// AuthType returns the type of info as a string.
+func (info) AuthType() string {
+	return "unix socket"
+}
+
+type grpcUnixSocketTransportCredential struct {
+	allowedUsrID int
+	allowedGrpID int
+}
+
+func (gustc grpcUnixSocketTransportCredential) ClientHandshake(ctx context.Context, authority string, conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return conn, info{credentials.CommonAuthInfo{SecurityLevel: credentials.NoSecurity}}, nil
+}
+
+func (gustc grpcUnixSocketTransportCredential) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	unixConn, ok := conn.(*net.UnixConn)
+	if !ok {
+		return conn, info{credentials.CommonAuthInfo{SecurityLevel: credentials.NoSecurity}}, nil
+	}
+	valid, err := processnet.IsUnixNetConnValid(unixConn, gustc.allowedUsrID, gustc.allowedGrpID)
+	if err != nil || !valid {
+		if err != nil {
+			log.Errorf("unix socket %s -> %s closing connection, error %s", unixConn.LocalAddr(), unixConn.RemoteAddr(), err)
+		}
+		if !valid {
+			log.Debugf("unix socket %s -> %s closing connection, rejected", unixConn.LocalAddr(), unixConn.RemoteAddr())
+		}
+		// reject the connection
+		conn.Close()
+	}
+	return conn, info{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}, nil
+}
+
+func (gustc grpcUnixSocketTransportCredential) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{SecurityProtocol: "unix socket"}
+}
+
+func (gustc grpcUnixSocketTransportCredential) Clone() credentials.TransportCredentials {
+	return grpcUnixSocketTransportCredential{gustc.allowedUsrID, gustc.allowedGrpID}
+}
+
+func (gustc grpcUnixSocketTransportCredential) OverrideServerName(string) error {
+	return nil
 }
 
 // Init initializes the module
@@ -646,6 +699,13 @@ func NewModule(cfg *sconfig.Config, opts Opts) (module.Module, error) {
 		seclog.Errorf("unable to instantiate self tests: %s", err)
 	}
 
+	allowedUsrID, allowedGrpID, err := filesystem.UserDDAgent()
+	if err != nil {
+		// if user dd-agent doesn't exist, map to root
+		allowedUsrID = 0
+		allowedGrpID = 0
+	}
+
 	m := &Module{
 		config:         cfg,
 		probe:          probe,
@@ -653,14 +713,16 @@ func NewModule(cfg *sconfig.Config, opts Opts) (module.Module, error) {
 		reloading:      atomic.NewBool(false),
 		statsdClient:   statsdClient,
 		apiServer:      NewAPIServer(cfg, probe, statsdClient),
-		grpcServer:     grpc.NewServer(),
-		rateLimiter:    NewRateLimiter(statsdClient),
-		sigupChan:      make(chan os.Signal, 1),
-		ctx:            ctx,
-		cancelFnc:      cancelFnc,
-		selfTester:     selfTester,
-		policyMonitor:  NewPolicyMonitor(statsdClient),
-		sendStatsChan:  make(chan chan bool, 1),
+		grpcServer: grpc.NewServer(grpc.Creds(grpcUnixSocketTransportCredential{
+			allowedUsrID: allowedUsrID,
+			allowedGrpID: allowedGrpID})),
+		rateLimiter:   NewRateLimiter(statsdClient),
+		sigupChan:     make(chan os.Signal, 1),
+		ctx:           ctx,
+		cancelFnc:     cancelFnc,
+		selfTester:    selfTester,
+		policyMonitor: NewPolicyMonitor(statsdClient),
+		sendStatsChan: make(chan chan bool, 1),
 	}
 	m.apiServer.module = m
 
